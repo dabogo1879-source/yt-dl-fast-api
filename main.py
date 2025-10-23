@@ -1,36 +1,21 @@
 import os
-import random
 import yt_dlp
-import time
-from fastapi import FastAPI
-from fastapi.exceptions import HTTPException
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from yt_dlp.postprocessor import FFmpegPostProcessor
+import random
+import string
 
-download_path = os.environ.get('DOWNLOAD_PATH')
-port = os.environ.get('PORT')
-ffmpeg_location = os.environ.get('FFMPEG_LOCATION')
+app = FastAPI()
 
-if download_path is None \
-        or port is None\
-        or ffmpeg_location is None:
-    raise Exception('application environment not set properly')
-
-FFmpegPostProcessor._ffmpeg_location.set(ffmpeg_location)
+# Configure download path
+download_path = os.getenv('DOWNLOAD_PATH', '/tmp/downloads')
+os.makedirs(download_path, exist_ok=True)
 
 class YtVideoDownloadRequestBody(BaseModel):
     url: str
 
 def generate_random_file_name():
-    timestamp_ms = int(time.time() * 1000)
-    random_number = random.random()
-    return f"{timestamp_ms}{random_number}"
-
-app = FastAPI()
-
-@app.get("/")
-def health():
-    return {"success": "true", "message": f'downloader service running on port {port}'}
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=16))
 
 @app.post("/api/download")
 def download_video(body: YtVideoDownloadRequestBody):
@@ -41,6 +26,7 @@ def download_video(body: YtVideoDownloadRequestBody):
             'default': "/".join([download_path, file_name]),
         },
         'format': 'm4a/bestaudio/best',
+        'cookiefile': 'cookies.txt',
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'm4a',
@@ -57,6 +43,7 @@ def download_video(body: YtVideoDownloadRequestBody):
 @app.post("/download_audio")
 def download_audio(url: str = None, body: YtVideoDownloadRequestBody = None):
     """Download audio endpoint - supports both GET and POST methods"""
+    
     # Get URL from query parameter (GET) or request body (POST)
     video_url = url if url else (body.url if body else None)
     
@@ -70,6 +57,7 @@ def download_audio(url: str = None, body: YtVideoDownloadRequestBody = None):
             'default': "/".join([download_path, file_name]),
         },
         'format': 'm4a/bestaudio/best',
+        'cookiefile': 'cookies.txt',
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'm4a',
